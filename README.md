@@ -26,4 +26,55 @@ PosturePal helps users improve ergonomics, reduce slouching, and track posture t
 2. Frames are processed on the Flask backend using OpenCV and MediaPipe  
 3. Key body landmarks are extracted and evaluated using angle-based heuristics  
 4. Feedback and alerts are returned to the frontend in real time  
-5. Posture data is summarized to provide historical insights  
+5. Posture data is summarized to provide historical insights
+
+## Frontend
+
+To run the frontend, execute the following commands from the project root:
+cd frontend
+npm install
+npm run dev
+
+The frontend will run locally at:
+
+http://localhost:5173
+
+
+---
+
+## Backend
+
+To run the backend, execute the following commands from the project root:
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python app.py
+
+
+The backend server will run locally at:
+
+http://localhost:5005
+
+
+---
+
+## Usage
+
+With both the backend and frontend running, open the frontend URL in a browser and allow webcam access. On first launch, the application performs a short calibration period during which the user should sit upright. After calibration, posture is monitored continuously in real time.
+
+A green visual aura indicates good posture, while a red aura signals that poor posture has been detected and corrective action is recommended.
+
+---
+
+## Notes
+
+For best results, ensure that the user’s upper body and shoulders are clearly visible to the camera and that the environment is well lit. Calibration is required once per session to maintain accurate posture detection.
+
+---
+
+
+
+
+
+
