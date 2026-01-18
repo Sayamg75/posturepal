@@ -1,35 +1,84 @@
-# backend/posture.py
-import cv2    # OpenCV, handles image processing
-import mediapipe as mp  # MediaPipe, detects human pose keypoints
-import numpy as np  # used for vector math
+import cv2
+import mediapipe as mp
+import numpy as np
 import base64
+import time
 
 mp_pose = mp.solutions.pose
-pose = mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5)
+pose = mp_pose.Pose()
+
+# ---------- GLOBAL STATE ----------
+BASELINE = None
+BASELINE_TIME = None
+CALIBRATION_DURATION = 5  # seconds
 
 def analyze_posture(image_base64):
-    """
-    image_base64: string from frontend (captured webcam frame)
-    returns: dictionary like {'status': 'good', 'tip': 'keep your back straight'}
-    """
-    # Convert base64 to numpy array (OpenCV image)
-    nparr = np.frombuffer(base64.b64decode(image_base64), np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    global BASELINE, BASELINE_TIME
 
-    # Convert BGR to RGB for Mediapipe
-    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    image_bytes = base64.b64decode(image_base64)
+    np_arr = np.frombuffer(image_bytes, np.uint8)
+    image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
-    # Process the image with MediaPipe
-    results = pose.process(img_rgb)
+    if image is None:
+        return {"status": "error", "tip": "Invalid image"}
 
-    if results.pose_landmarks:
-        shoulder = results.pose_landmarks.landmark[mp_pose.PoseLandmark.LEFT_SHOULDER]
-        hip = results.pose_landmarks.landmark[mp_pose.PoseLandmark.LEFT_HIP]
-        angle = np.arctan2(shoulder.y - hip.y, shoulder.x - hip.x) * 180 / np.pi
+    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    results = pose.process(image_rgb)
 
-        if angle > 160:
-            return {"status": "good", "tip": "Great posture!"}
-        else:
-            return {"status": "slouching", "tip": "Sit up straight!"}
+    if not results.pose_landmarks:
+        return {"status": "error", "tip": "No body detected"}
+
+    lm = results.pose_landmarks.landmark
+
+    # Key landmarks
+    ear = np.array([lm[mp_pose.PoseLandmark.LEFT_EAR].x,
+                    lm[mp_pose.PoseLandmark.LEFT_EAR].y])
+
+    shoulder = np.array([lm[mp_pose.PoseLandmark.LEFT_SHOULDER].x,
+                         lm[mp_pose.PoseLandmark.LEFT_SHOULDER].y])
+
+    hip = np.array([lm[mp_pose.PoseLandmark.LEFT_HIP].x,
+                    lm[mp_pose.PoseLandmark.LEFT_HIP].y])
+
+    # Current posture vector
+    posture_vector = ear - shoulder
+
+    now = time.time()
+
+    # ---------- CALIBRATION ----------
+    if BASELINE is None:
+        if BASELINE_TIME is None:
+            BASELINE_TIME = now
+            return {
+                "status": "calibrating",
+                "tip": "Sit upright for 5 seconds to calibrate posture"
+            }
+
+        if now - BASELINE_TIME < CALIBRATION_DURATION:
+            return {
+                "status": "calibrating",
+                "tip": "Calibrating... hold good posture"
+            }
+
+        BASELINE = posture_vector
+        return {
+            "status": "good",
+            "tip": "Calibration complete. Monitoring posture."
+        }
+
+    # ---------- DEVIATION FROM BASELINE ----------
+    deviation = np.linalg.norm(posture_vector - BASELINE)
+
+    # VERY SENSITIVE threshold (guaranteed to trigger)
+    if deviation > 0.03:
+        status = "slouching"
+        tip = "Posture deviation detected — straighten up!"
     else:
-        return {"status": "unknown", "tip": "No person detected"}
+        status = "good"
+        tip = "Good posture"
+
+    return {
+        "status": status,
+        "tip": tip,
+        "deviation": round(float(deviation), 4)
+    }

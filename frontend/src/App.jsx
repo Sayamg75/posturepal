@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import Webcam from "react-webcam";
 
 function App() {
@@ -7,41 +7,68 @@ function App() {
 
   const capture = useCallback(async () => {
     if (!webcamRef.current) return;
-    const screenshot = webcamRef.current.getScreenshot();
-    if (!screenshot) return;
 
-    const base64Image = screenshot.split(",")[1];
+    const imageSrc = webcamRef.current.getScreenshot();
+    if (!imageSrc) return;
+
+    const base64Image = imageSrc.split(",")[1];
 
     try {
-      const response = await fetch("http://localhost:5005/analyze", {
+      const res = await fetch("http://localhost:5005/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image: base64Image }),
       });
 
-      const data = await response.json();
+      const data = await res.json();
       setResult(data);
-    } catch (err) {
-      console.error("Error contacting backend:", err);
-    }
+    } catch (e) {}
   }, []);
+
+  useEffect(() => {
+    const id = setInterval(capture, 300);
+    return () => clearInterval(id);
+  }, [capture]);
+
+  const auraColor =
+    result?.status === "slouching"
+      ? "rgba(255, 0, 0, 0.8)"
+      : result?.status === "calibrating"
+      ? "rgba(255, 200, 0, 0.6)"
+      : "rgba(0, 255, 150, 0.6)";
 
   return (
     <div style={{ textAlign: "center", padding: "20px" }}>
-      <h1> PosturePal</h1>
-      <Webcam
-        ref={webcamRef}
-        screenshotFormat="image/jpeg"
-        width={400}
-        height={300}
-      />
-      <div style={{ marginTop: "20px" }}>
-        <button onClick={capture}>Analyze Posture</button>
+      <h1>PosturePal</h1>
+
+      <div
+        style={{
+          width: "420px",
+          margin: "0 auto",
+          boxShadow: `0 0 40px 18px ${auraColor}`,
+          borderRadius: "12px",
+          transition: "box-shadow 0.2s ease",
+        }}
+      >
+        <Webcam
+          ref={webcamRef}
+          screenshotFormat="image/jpeg"
+          width={400}
+          height={300}
+          videoConstraints={{ facingMode: "user" }}
+          style={{ borderRadius: "12px" }}
+        />
       </div>
+
       {result && (
-        <div style={{ marginTop: "20px" }}>
-          <h3>Status: {result.status}</h3>
-          <p>Tip: {result.tip}</p>
+        <div style={{ marginTop: "15px" }}>
+          <h3>{result.status.toUpperCase()}</h3>
+          <p>{result.tip}</p>
+          {result.deviation && (
+            <p style={{ fontSize: "12px" }}>
+              Deviation: {result.deviation}
+            </p>
+          )}
         </div>
       )}
     </div>
@@ -49,4 +76,3 @@ function App() {
 }
 
 export default App;
-
